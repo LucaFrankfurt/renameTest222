@@ -76,12 +76,15 @@ Set *Ports Exposes* to `3000`.
 ### Troubleshooting: the database is empty after every redeploy
 
 This means `/data` is not on a persistent mount, so it lives in the container
-filesystem and is thrown away with the old container. The server detects this
-and says so at startup — check the deployment logs for:
+filesystem and is thrown away with the old container.
+
+The image sets `REQUIRE_PERSISTENT_DB=true`, so a container in this state
+**refuses to start** rather than quietly collecting data it is about to lose —
+the deployment fails visibly with:
 
 ```
-WARNING: /data is NOT on a mounted volume - it is part of the container
-filesystem, so the database is DELETED on every redeploy.
+Refusing to start: /data is not on a mounted volume - it is part of the
+container filesystem, so the database is discarded on every redeploy.
 ```
 
 A healthy deployment logs this instead:
@@ -92,8 +95,8 @@ rows at startup: 412
 persistence: /data is on the mount /data
 ```
 
-`newly created` on a redeploy, or the warning, confirms the mount is missing.
-The fix depends on the build pack:
+`newly created` on a redeploy confirms the mount is missing. The fix depends on
+the build pack:
 
 - **Dockerfile build pack** (the default when a repo has a `Dockerfile`) —
   `docker-compose.yaml` is ignored entirely, so no volume is mounted. Add one
@@ -103,6 +106,18 @@ The fix depends on the build pack:
   `docker-compose.yaml`, and that the volume was not removed. When deleting or
   recreating the resource, Coolify asks about volumes; choosing *Delete Volumes*
   wipes the database.
+
+You can also check persistence over HTTP — `GET /api/health` reports it:
+
+```json
+{ "status": "ok",
+  "database": { "path": "/data/app.db", "persistent": true,
+                "mountPoint": "/data", "rows": 412 } }
+```
+
+`persistent: false` means the mount is missing. To verify a redeploy really
+held, compare `rows` before and after: the count must carry over, and the log
+must say `(existing)`.
 
 To confirm on the host:
 
@@ -150,6 +165,12 @@ npm start
 | `PORT`             | `3000`           | HTTP port                      |
 | `DB_PATH`          | `./data/app.db`  | SQLite file location           |
 | `TICK_INTERVAL_MS` | `15000`          | how often a row is written     |
+| `REQUIRE_PERSISTENT_DB` | `true` in the image | refuse to start when the database directory is not a mounted volume |
+
+`REQUIRE_PERSISTENT_DB` is set to `true` in the `Dockerfile` so deployments fail
+loudly instead of losing data; it is unset when you run `npm start` locally, so
+a plain `./data` directory only warns. Set it to `false` to run a container
+deliberately without persistence.
 
 The database runs in WAL mode with a 5s busy timeout, so an unclean container
 stop is far less likely to leave it damaged. That means `app.db` is accompanied

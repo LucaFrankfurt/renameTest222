@@ -9,6 +9,9 @@ const PORT = Number(process.env.PORT) || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "app.db");
 const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS) || 15_000;
 const PUBLIC_DIR = path.join(__dirname, "public");
+// Set in the Dockerfile, so containers refuse to run without a real volume
+// while `npm start` on a laptop still works against ./data.
+const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -61,6 +64,20 @@ function mountPointFor(dir) {
 
 const existedBefore = fs.existsSync(DB_PATH);
 const mountPoint = mountPointFor(DB_DIR);
+
+const NO_MOUNT_MESSAGE =
+  `${DB_DIR} is not on a mounted volume - it is part of the container ` +
+  "filesystem, so the database is discarded on every redeploy.\n" +
+  "  Docker Compose: mount a named volume at /data (see docker-compose.yaml).\n" +
+  "  Coolify with the Dockerfile build pack: Configuration -> Persistent Storage,\n" +
+  "  Name sqlite-data, Source empty, Destination /data, then redeploy.\n" +
+  "  To run without persistence anyway, set REQUIRE_PERSISTENT_DB=false.";
+
+// Refusing to boot turns silent data loss into a visibly failed deployment.
+if (!mountPoint && REQUIRE_PERSISTENT_DB) {
+  console.error(`Refusing to start: ${NO_MOUNT_MESSAGE}`);
+  process.exit(1);
+}
 
 const db = new DatabaseSync(DB_PATH);
 
@@ -145,7 +162,15 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === "/api/health") {
-    sendJson(res, 200, { status: "ok" });
+    sendJson(res, 200, {
+      status: "ok",
+      database: {
+        path: DB_PATH,
+        persistent: mountPoint !== null,
+        mountPoint,
+        rows: countTicks.get().total,
+      },
+    });
     return;
   }
 
@@ -160,13 +185,7 @@ server.listen(PORT, () => {
   if (mountPoint) {
     console.log(`persistence: ${DB_DIR} is on the mount ${mountPoint}`);
   } else {
-    console.warn(
-      `WARNING: ${DB_DIR} is NOT on a mounted volume - it is part of the ` +
-        "container filesystem, so the database is DELETED on every redeploy.\n" +
-        "  Docker Compose: mount a named volume at /data (see docker-compose.yaml).\n" +
-        "  Coolify with the Dockerfile build pack: add a Persistent Storage entry\n" +
-        "  with an empty Source and Destination /data, then redeploy.",
-    );
+    console.warn(`WARNING: ${NO_MOUNT_MESSAGE}`);
   }
 });
 

@@ -2,7 +2,8 @@ FROM node:24-alpine
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    DB_PATH=/data/app.db
+    DB_PATH=/data/app.db \
+    REQUIRE_PERSISTENT_DB=true
 
 WORKDIR /app
 
