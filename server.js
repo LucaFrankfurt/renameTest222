@@ -9,6 +9,9 @@ const PORT = Number(process.env.PORT) || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "app.db");
 const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS) || 15_000;
 const PUBLIC_DIR = path.join(__dirname, "public");
+// Set in the Dockerfile, so containers refuse to run without a real volume
+// while `npm start` on a laptop still works against ./data.
+const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -32,6 +35,47 @@ try {
       "  chown -R 1000:1000 <host directory>\n" +
       "A Docker named volume (the default in docker-compose.yaml) needs no such step.",
   );
+  process.exit(1);
+}
+
+// Persistence lives or dies on whether DB_DIR sits on a mounted volume. If it
+// is just the container's own filesystem, every redeploy starts from an empty
+// database - say so loudly at boot instead of letting it be discovered later.
+function mountPointFor(dir) {
+  let mounts;
+  try {
+    mounts = fs.readFileSync("/proc/self/mountinfo", "utf8");
+  } catch {
+    return null; // Not Linux, or /proc unavailable: skip the check.
+  }
+
+  const target = path.resolve(dir);
+  let best = null;
+  for (const line of mounts.split("\n")) {
+    // mountinfo field 5 is the mount point within the container.
+    const point = line.split(" ")[4];
+    if (!point || point === "/") continue;
+    if (target === point || target.startsWith(point + "/")) {
+      if (!best || point.length > best.length) best = point;
+    }
+  }
+  return best;
+}
+
+const existedBefore = fs.existsSync(DB_PATH);
+const mountPoint = mountPointFor(DB_DIR);
+
+const NO_MOUNT_MESSAGE =
+  `${DB_DIR} is not on a mounted volume - it is part of the container ` +
+  "filesystem, so the database is discarded on every redeploy.\n" +
+  "  Docker Compose: mount a named volume at /data (see docker-compose.yaml).\n" +
+  "  Coolify with the Dockerfile build pack: Configuration -> Persistent Storage,\n" +
+  "  Name sqlite-data, Source empty, Destination /data, then redeploy.\n" +
+  "  To run without persistence anyway, set REQUIRE_PERSISTENT_DB=false.";
+
+// Refusing to boot turns silent data loss into a visibly failed deployment.
+if (!mountPoint && REQUIRE_PERSISTENT_DB) {
+  console.error(`Refusing to start: ${NO_MOUNT_MESSAGE}`);
   process.exit(1);
 }
 
@@ -118,7 +162,15 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === "/api/health") {
-    sendJson(res, 200, { status: "ok" });
+    sendJson(res, 200, {
+      status: "ok",
+      database: {
+        path: DB_PATH,
+        persistent: mountPoint !== null,
+        mountPoint,
+        rows: countTicks.get().total,
+      },
+    });
     return;
   }
 
@@ -126,7 +178,15 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`listening on http://0.0.0.0:${PORT} (db: ${DB_PATH})`);
+  console.log(`listening on http://0.0.0.0:${PORT}`);
+  console.log(`database: ${DB_PATH} (${existedBefore ? "existing" : "newly created"})`);
+  console.log(`rows at startup: ${countTicks.get().total}`);
+
+  if (mountPoint) {
+    console.log(`persistence: ${DB_DIR} is on the mount ${mountPoint}`);
+  } else {
+    console.warn(`WARNING: ${NO_MOUNT_MESSAGE}`);
+  }
 });
 
 function shutdown(signal) {
