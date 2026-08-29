@@ -1,0 +1,13 @@
+{
+  "name": "hello-world-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hello world UI that logs a timestamp to SQLite every 15 seconds",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
