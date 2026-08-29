@@ -7,7 +7,7 @@ timestamp to the database every 15 seconds, and the UI lists every row.
 
 - `server.js` — dependency-free Node server: static files, the 15s tick writer, and the JSON API
 - `public/index.html` / `styles.css` / `app.js` — the UI (polls the API every 5s)
-- `Dockerfile` — `node:22-alpine` image; the database lives on the `/data` volume
+- `Dockerfile` — `node:24-alpine` image; the database lives on the `/data` volume
 
 ## Data
 
@@ -35,7 +35,9 @@ container restarts; drop `-v` if you want a throwaway database.
 
 ## Run locally
 
-Requires Node 22.13+ (for the built-in `node:sqlite` module).
+Requires Node 24+, where the built-in `node:sqlite` module is available
+without an experimental warning. It also runs on Node 22.13+, which logs
+an `ExperimentalWarning` for SQLite on startup.
 
 ```bash
 npm start
