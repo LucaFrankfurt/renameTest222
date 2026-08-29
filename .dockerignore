@@ -5,3 +5,4 @@ Dockerfile
 README.md
 data
 node_modules
+docker-compose.yaml

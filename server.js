@@ -17,9 +17,30 @@ const MIME = {
   ".ico": "image/x-icon",
 };
 
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+const DB_DIR = path.dirname(DB_PATH);
+
+// On a fresh named volume Docker copies the image's ownership of /data, so the
+// non-root user can write. A host bind mount does not: it arrives owned by root
+// and every write fails. Say so clearly instead of crashing on the first insert.
+try {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+  fs.accessSync(DB_DIR, fs.constants.W_OK);
+} catch (error) {
+  console.error(
+    `Cannot write to the database directory ${DB_DIR}: ${error.message}\n` +
+      "If this is a bind-mounted host directory, give it to the container user:\n" +
+      "  chown -R 1000:1000 <host directory>\n" +
+      "A Docker named volume (the default in docker-compose.yaml) needs no such step.",
+  );
+  process.exit(1);
+}
 
 const db = new DatabaseSync(DB_PATH);
+
+// WAL survives an unclean container stop better than the rollback journal, and
+// busy_timeout keeps concurrent readers from failing outright while a write commits.
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec(`
   CREATE TABLE IF NOT EXISTS ticks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

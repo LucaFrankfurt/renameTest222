@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Coolify fills this in on the first deploy and routes the generated
+      # domain to port 3000. Override it under Environment Variables to pin
+      # your own domain.
+      - SERVICE_FQDN_APP_3000
+      - PORT=3000
+      - DB_PATH=/data/app.db
+      - TICK_INTERVAL_MS=15000
+    expose:
+      - "3000"
+    volumes:
+      # Named volume, not a host path: Docker seeds a fresh named volume with
+      # the image's /data ownership, so the non-root `node` user can write.
+      # Coolify prefixes the volume with the resource UUID and keeps it across
+      # deployments.
+      - sqlite-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  sqlite-data:

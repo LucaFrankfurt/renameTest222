@@ -12,7 +12,6 @@ COPY server.js ./
 COPY public/ ./public/
 
 RUN mkdir -p /data && chown -R node:node /data /app
-VOLUME ["/data"]
 
 USER node
 EXPOSE 3000
