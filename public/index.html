@@ -9,9 +9,32 @@
   <body>
     <main class="card">
       <h1>Hello, World!</h1>
-      <p>This page is served by nginx from a Docker container.</p>
+      <p class="lede">
+        The server writes the current time into a SQLite database every
+        <span id="interval">15 seconds</span>. Every row is listed below.
+      </p>
+
       <button id="greet" type="button">Say hello</button>
       <p id="output" class="output" role="status"></p>
+
+      <section class="ticks">
+        <header class="ticks-header">
+          <h2>Database rows</h2>
+          <span id="total" class="badge">–</span>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Recorded at (UTC)</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr class="empty"><td colspan="2">Loading…</td></tr>
+          </tbody>
+        </table>
+        <p id="status" class="hint"></p>
+      </section>
     </main>
     <script src="app.js"></script>
   </body>

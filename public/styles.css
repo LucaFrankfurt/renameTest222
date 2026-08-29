@@ -75,3 +75,87 @@ button:hover {
   color: var(--fg);
   font-weight: 600;
 }
+
+.card {
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.lede {
+  margin-bottom: 24px;
+}
+
+.ticks {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.ticks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+thead th {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+tbody td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody td:first-child {
+  width: 4em;
+  color: var(--muted);
+}
+
+.empty td {
+  padding: 16px 4px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
