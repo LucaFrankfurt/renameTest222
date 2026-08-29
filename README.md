@@ -8,6 +8,7 @@ timestamp to the database every 15 seconds, and the UI lists every row.
 - `server.js` — dependency-free Node server: static files, the 15s tick writer, and the JSON API
 - `public/index.html` / `styles.css` / `app.js` — the UI (polls the API every 5s)
 - `Dockerfile` — `node:24-alpine` image; the database lives on the `/data` volume
+- `docker-compose.yaml` — deployment definition (named volume, healthcheck, Coolify domain variable)
 
 ## Data
 
@@ -26,12 +27,70 @@ Table `ticks`:
 ## Run with Docker
 
 ```bash
+docker compose up --build
+```
+
+Then open http://localhost:3000. The named volume keeps the database across
+container restarts.
+
+Or without compose:
+
+```bash
 docker build -t hello-world-ui .
 docker run --rm -p 3000:3000 -v hello-world-data:/data hello-world-ui
 ```
 
-Then open http://localhost:3000. The named volume keeps the database across
-container restarts; drop `-v` if you want a throwaway database.
+Drop `-v` there if you want a throwaway database.
+
+## Deploying on Coolify
+
+Use the **Docker Compose** build pack and point it at `docker-compose.yaml`.
+It already declares everything Coolify needs:
+
+- `SERVICE_FQDN_APP_3000` — Coolify generates a domain on the first deploy and
+  routes it to port 3000. Override it under *Environment Variables* to use your
+  own domain.
+- `sqlite-data:/data` — a named volume, so the database survives redeploys.
+  Coolify prefixes it with the resource UUID and lists it read-only under
+  *Configuration → Persistent Storage*; change the mount in the compose file,
+  not in the UI.
+- A healthcheck on `/api/health`, so Coolify only marks the container healthy
+  once the server is actually answering.
+
+No `networks:` block is needed — Coolify creates a shared network for the stack.
+
+### If you deploy with the Dockerfile build pack instead
+
+The Dockerfile deliberately has **no `VOLUME` instruction**: that would create a
+throwaway anonymous volume on every deploy and silently lose the database. Add
+the mount yourself under *Configuration → Persistent Storage*:
+
+| field            | value        |
+| ---------------- | ------------ |
+| Name             | `sqlite-data` |
+| Source           | *(leave empty — this makes it a named volume)* |
+| Destination path | `/data`      |
+
+Set *Ports Exposes* to `3000`.
+
+### Permissions
+
+The container runs as the non-root `node` user (uid 1000). A **named volume** is
+seeded with the image's ownership of `/data`, so it just works. A **host bind
+mount** is not — it arrives owned by root and every write fails. If you mount a
+host path, hand it to the container user first:
+
+```bash
+chown -R 1000:1000 /path/on/host
+```
+
+The server checks this at startup and exits with that instruction rather than
+failing on the first insert.
+
+### Deleting the resource
+
+Coolify asks whether to remove volumes. Choose **Keep Volumes** unless you
+really want the database gone.
 
 ## Run locally
 
@@ -50,3 +109,8 @@ npm start
 | `PORT`             | `3000`           | HTTP port                      |
 | `DB_PATH`          | `./data/app.db`  | SQLite file location           |
 | `TICK_INTERVAL_MS` | `15000`          | how often a row is written     |
+
+The database runs in WAL mode with a 5s busy timeout, so an unclean container
+stop is far less likely to leave it damaged. That means `app.db` is accompanied
+by `app.db-wal` and `app.db-shm` in the volume; back up all three, or copy the
+database with `sqlite3 app.db ".backup out.db"`.
