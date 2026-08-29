@@ -55,7 +55,8 @@ It already declares everything Coolify needs:
   *Configuration → Persistent Storage*; change the mount in the compose file,
   not in the UI.
 - A healthcheck on `/api/health`, so Coolify only marks the container healthy
-  once the server is actually answering.
+  once the server is actually answering. It runs through `node` rather than
+  `curl`/`wget`, which the image is not guaranteed to ship.
 
 No `networks:` block is needed — Coolify creates a shared network for the stack.
 
@@ -99,9 +100,13 @@ persistence: /data is on the mount /data
 the build pack:
 
 - **Dockerfile build pack** (the default when a repo has a `Dockerfile`) —
-  `docker-compose.yaml` is ignored entirely, so no volume is mounted. Add one
-  under *Configuration → Persistent Storage*: Name `sqlite-data`, **Source
-  empty**, Destination `/data`. Then redeploy.
+  `docker-compose.yaml` is ignored entirely, so no volume is mounted. You can
+  tell from the deploy log: `Dockerfile or Docker Image based deployment
+  detected`. Add the volume under *Configuration → Persistent Storage*: Name
+  `sqlite-data`, **Source empty**, Destination `/data`. Then redeploy.
+
+  Or switch the resource to the **Docker Compose** build pack, so the volume in
+  `docker-compose.yaml` is used and the mount stays in version control.
 - **Docker Compose build pack** — confirm Coolify is actually using
   `docker-compose.yaml`, and that the volume was not removed. When deleting or
   recreating the resource, Coolify asks about volumes; choosing *Delete Volumes*
