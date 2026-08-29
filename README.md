@@ -73,6 +73,47 @@ the mount yourself under *Configuration → Persistent Storage*:
 
 Set *Ports Exposes* to `3000`.
 
+### Troubleshooting: the database is empty after every redeploy
+
+This means `/data` is not on a persistent mount, so it lives in the container
+filesystem and is thrown away with the old container. The server detects this
+and says so at startup — check the deployment logs for:
+
+```
+WARNING: /data is NOT on a mounted volume - it is part of the container
+filesystem, so the database is DELETED on every redeploy.
+```
+
+A healthy deployment logs this instead:
+
+```
+database: /data/app.db (existing)
+rows at startup: 412
+persistence: /data is on the mount /data
+```
+
+`newly created` on a redeploy, or the warning, confirms the mount is missing.
+The fix depends on the build pack:
+
+- **Dockerfile build pack** (the default when a repo has a `Dockerfile`) —
+  `docker-compose.yaml` is ignored entirely, so no volume is mounted. Add one
+  under *Configuration → Persistent Storage*: Name `sqlite-data`, **Source
+  empty**, Destination `/data`. Then redeploy.
+- **Docker Compose build pack** — confirm Coolify is actually using
+  `docker-compose.yaml`, and that the volume was not removed. When deleting or
+  recreating the resource, Coolify asks about volumes; choosing *Delete Volumes*
+  wipes the database.
+
+To confirm on the host:
+
+```bash
+docker volume ls | grep sqlite-data
+docker inspect <container> --format '{{json .Mounts}}' | jq
+```
+
+`Mounts` must contain a `/data` entry. If it is empty, the container has no
+volume regardless of what the compose file says.
+
 ### Permissions
 
 The container runs as the non-root `node` user (uid 1000). A **named volume** is

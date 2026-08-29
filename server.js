@@ -35,6 +35,33 @@ try {
   process.exit(1);
 }
 
+// Persistence lives or dies on whether DB_DIR sits on a mounted volume. If it
+// is just the container's own filesystem, every redeploy starts from an empty
+// database - say so loudly at boot instead of letting it be discovered later.
+function mountPointFor(dir) {
+  let mounts;
+  try {
+    mounts = fs.readFileSync("/proc/self/mountinfo", "utf8");
+  } catch {
+    return null; // Not Linux, or /proc unavailable: skip the check.
+  }
+
+  const target = path.resolve(dir);
+  let best = null;
+  for (const line of mounts.split("\n")) {
+    // mountinfo field 5 is the mount point within the container.
+    const point = line.split(" ")[4];
+    if (!point || point === "/") continue;
+    if (target === point || target.startsWith(point + "/")) {
+      if (!best || point.length > best.length) best = point;
+    }
+  }
+  return best;
+}
+
+const existedBefore = fs.existsSync(DB_PATH);
+const mountPoint = mountPointFor(DB_DIR);
+
 const db = new DatabaseSync(DB_PATH);
 
 // WAL survives an unclean container stop better than the rollback journal, and
@@ -126,7 +153,21 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`listening on http://0.0.0.0:${PORT} (db: ${DB_PATH})`);
+  console.log(`listening on http://0.0.0.0:${PORT}`);
+  console.log(`database: ${DB_PATH} (${existedBefore ? "existing" : "newly created"})`);
+  console.log(`rows at startup: ${countTicks.get().total}`);
+
+  if (mountPoint) {
+    console.log(`persistence: ${DB_DIR} is on the mount ${mountPoint}`);
+  } else {
+    console.warn(
+      `WARNING: ${DB_DIR} is NOT on a mounted volume - it is part of the ` +
+        "container filesystem, so the database is DELETED on every redeploy.\n" +
+        "  Docker Compose: mount a named volume at /data (see docker-compose.yaml).\n" +
+        "  Coolify with the Dockerfile build pack: add a Persistent Storage entry\n" +
+        "  with an empty Source and Destination /data, then redeploy.",
+    );
+  }
 });
 
 function shutdown(signal) {
